@@ -72,7 +72,11 @@ public class Main implements NativeKeyListener {
             System.err.println("Failed to register global key hook: " + ex.getMessage());
         }
 
-        JFrame frame = new JFrame("CrayonAPNavAssist");
+        // Highlight on focus
+        Color normalBg = new Color(45, 45, 45);
+        Color focusBg = new Color(70, 70, 70); // Slightly lighter gray
+
+        JFrame frame = new JFrame("CrayonNavConfig");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(340, 560);
         frame.setResizable(false);
@@ -167,6 +171,21 @@ public class Main implements NativeKeyListener {
         prevField.setBackground(new Color(45, 45, 45));
         prevField.setForeground(Color.WHITE);
         prevField.setBounds(85, 40, 195, 25);
+
+        // On Focus
+        prevField.addFocusListener(new java.awt.event.FocusAdapter() {
+            @Override
+            public void focusGained(java.awt.event.FocusEvent e) {
+                prevField.setBackground(focusBg);
+            }
+
+            @Override
+            public void focusLost(java.awt.event.FocusEvent e) {
+                prevField.setBackground(normalBg);
+            }
+        });
+
+        // For Rebinding
         prevField.addKeyListener(new KeyAdapter()
         {
             @Override
@@ -214,6 +233,21 @@ public class Main implements NativeKeyListener {
         nextField.setBackground(new Color(45, 45, 45));
         nextField.setForeground(Color.WHITE);
         nextField.setBounds(85, 75, 195, 25);
+
+        // On Focus
+        nextField.addFocusListener(new java.awt.event.FocusAdapter() {
+            @Override
+            public void focusGained(java.awt.event.FocusEvent e) {
+                nextField.setBackground(focusBg);
+            }
+
+            @Override
+            public void focusLost(java.awt.event.FocusEvent e) {
+                nextField.setBackground(normalBg);
+            }
+        });
+
+        // For Rebinding
         nextField.addKeyListener(new KeyAdapter()
         {
             @Override
