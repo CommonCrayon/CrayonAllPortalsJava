@@ -480,10 +480,10 @@ public class Main implements NativeKeyListener {
         navFrame.add(cardWrapper, BorderLayout.CENTER);
         navFrame.add(navWrapper, BorderLayout.SOUTH);
 
-        RefreshNavWindow();
-
         navFrame.setLocationRelativeTo(null);
         navFrame.setVisible(true);
+
+        RefreshNavWindow();
     }
 
     //=========================================================
