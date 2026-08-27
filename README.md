@@ -4,6 +4,9 @@
 This is a tool designed for Minecraft Speedrunning in the All Portals category.
 Ideally each player should download this tool and it allows for easier stronghold tracking and navigation.
 
+### Known Issues
+- Some keybind combinations don't work.
+
 ## Configuration Page
 ![](images/config_page.png?raw=true)
 
