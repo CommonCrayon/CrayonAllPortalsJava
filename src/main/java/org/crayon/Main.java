@@ -40,9 +40,6 @@ public class Main implements NativeKeyListener {
     private static int nextNativeKey = NativeKeyEvent.VC_RIGHT;
     private static boolean requiresCtrl = true;
 
-    // Main UI components
-    private static JLabel f3cStatusLabel;
-
     // Viewer Window components
     private static JFrame navFrame;
 
@@ -79,23 +76,17 @@ public class Main implements NativeKeyListener {
         // Setup FlatDarkLaf
         FlatDarkLaf.setup();
 
+        // Frame setup
         JFrame frame = new JFrame("CrayonNavConfig");
-
-        // Change color of bar
-        frame.getRootPane().putClientProperty("JRootPane.titleBarBackground", new Color(30, 30, 30));
-        frame.getRootPane().putClientProperty("JRootPane.titleBarForeground", Color.WHITE);
-
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(340, 560);
-        frame.setResizable(false);
+        frame.setSize(340, 475);
         frame.setLocationRelativeTo(null);
 
         JPanel panel = new JPanel();
         panel.setLayout(null);
-        panel.setBackground(new Color(24, 24, 24));
         frame.add(panel);
 
-        JLabel titleLabel = new JLabel("All Portals Navigator", SwingConstants.CENTER);
+        JLabel titleLabel = new JLabel("Crayon Nav Assist", SwingConstants.CENTER);
         titleLabel.setFont(new Font("SansSerif", Font.PLAIN, 22));
         titleLabel.setForeground(Color.WHITE);
         titleLabel.setBounds(10, 10, 304, 30);
@@ -103,7 +94,7 @@ public class Main implements NativeKeyListener {
 
         JLabel subtitleLabel = new JLabel("Paste list below:");
         subtitleLabel.setFont(new Font("SansSerif", Font.PLAIN, 16));
-        subtitleLabel.setForeground(new Color(220, 220, 220));
+        subtitleLabel.setForeground(Color.WHITE);
         subtitleLabel.setBounds(15, 45, 304, 25);
         panel.add(subtitleLabel);
 
@@ -116,11 +107,9 @@ public class Main implements NativeKeyListener {
                 [5, 14336, 0]
                 [6, 17408, 0]
                 [7, 20480, 0]
-                [8, 23552, 0]
-                """
+                [8, 23552, 0]"""
         );
         textArea.setFont(new Font("Monospaced", Font.PLAIN, 14));
-        textArea.setBackground(new Color(32, 32, 32));
         textArea.setForeground(Color.WHITE);
         textArea.setCaretColor(Color.WHITE);
         textArea.setMargin(new Insets(8, 8, 8, 8));
@@ -139,27 +128,11 @@ public class Main implements NativeKeyListener {
         launchButton.addActionListener(e -> Launch(textArea.getText()));
         panel.add(launchButton);
 
-        // Status Panel
-        JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 5));
-        statusPanel.setBackground(new Color(35, 35, 35));
-        statusPanel.setBounds(15, 310, 294, 35);
-
-        JLabel statusTitle = new JLabel("F3+C:");
-        statusTitle.setForeground(Color.WHITE);
-        statusTitle.setFont(new Font("SansSerif", Font.PLAIN, 12));
-        f3cStatusLabel = new JLabel("Not loaded");
-        f3cStatusLabel.setForeground(Color.RED);
-        f3cStatusLabel.setFont(new Font("SansSerif", Font.BOLD, 12));
-
-        statusPanel.add(statusTitle);
-        statusPanel.add(f3cStatusLabel);
-        panel.add(statusPanel);
-
         // Rebind Controls Panel
         JPanel rebindPanel = new JPanel();
         rebindPanel.setLayout(null);
-        rebindPanel.setBackground(new Color(35, 35, 35));
-        rebindPanel.setBounds(15, 355, 294, 135);
+        rebindPanel.setBackground(new Color(50, 52, 54));
+        rebindPanel.setBounds(15, 310, 294, 110);
 
         JLabel rebindTitle = new JLabel("Rebind Controls:", SwingConstants.LEFT);
         rebindTitle.setFont(new Font("SansSerif", Font.PLAIN, 15));
@@ -293,8 +266,8 @@ public class Main implements NativeKeyListener {
         panel.add(rebindPanel);
         frame.setVisible(true);
 
-        // Start Clipboard Monitoring Timer (250ms interval)
-        Timer timer = new Timer(250, e -> CheckClipboard());
+        // Start Clipboard Monitoring Timer (50ms interval)
+        Timer timer = new Timer(50, e -> CheckClipboard());
         timer.start();
     }
 
@@ -357,18 +330,12 @@ public class Main implements NativeKeyListener {
         {
             playerDimension = matcher.group(1);
             playerX = Double.parseDouble(matcher.group(2));
-            Double playerY = Double.parseDouble(matcher.group(3));
             playerZ = Double.parseDouble(matcher.group(4));
             playerYaw = Double.parseDouble(matcher.group(5));
-            // Double playerPitch = Double.parseDouble(matcher.group(6));
-
-            f3cStatusLabel.setText(String.format("Loaded (%s) at [%.0f, %.0f, %.0f]", playerDimension, playerX, playerY, playerZ));
-            f3cStatusLabel.setForeground(Color.GREEN);
         }
         catch (Exception e)
         {
-            f3cStatusLabel.setText("Parse failed");
-            f3cStatusLabel.setForeground(Color.RED);
+            System.err.println("Parse failed: " + e.getMessage());
         }
 
         RefreshNavWindow();
