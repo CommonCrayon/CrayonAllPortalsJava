@@ -8,7 +8,7 @@ Ideally each player should download this tool and it allows for easier stronghol
 - Some keybind combinations don't work.
 
 ## Configuration Page
-![](images/config_page.png?raw=true)
+![](images/config_page_v1_3.png?raw=true)
 
 ### Main Textbox
 In the main textbox the parseable text that you will use to set locations will be pasted.
@@ -32,7 +32,7 @@ Just enter the key within the entry box you'd like to use.
 
 - The bottom frame allows to switch between tracking items and updates the target.
 
-![](images/nav_assist.png?raw=true)
+![](images/nav_assist_v1_3.png?raw=true)
 
 # Usage
 1. Download CrayonAllPortalsJava-1.3.jar from releases.
