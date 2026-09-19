@@ -25,18 +25,17 @@ This section allows the user to rebind keys to go to previous and next coordinat
 Just enter the key within the entry box you'd like to use.
 
 ## CrayonNavAssist
-- The first row is the Stronghold Number.
-- The second row contains the Target X and Z labels.
-- The third row contains the Distance to X and Z target coords.
-- The fourth row contains the Required Angle in the F3 menu.
-- The fifth row displays the Turn Amount required after pressing F3+C.
+- The first column is the Stronghold Number.
+- The second column contains the Target coordinates.
+- The third column contains the Distance to target coordinates.
+- The fourth column contains the Required Angle in the F3 menu and displays the Turn Amount required after pressing F3+C.
 
 - The bottom frame allows to switch between tracking items and updates the target.
 
 ![](images/nav_assist.png?raw=true)
 
 # Usage
-1. Download CrayonAllPortalsJava-1.1.jar from releases.
+1. Download CrayonAllPortalsJava-1.3.jar from releases.
 2. Run downloaded jar file.
 3. You will be presented with the Configuration Page.
 
