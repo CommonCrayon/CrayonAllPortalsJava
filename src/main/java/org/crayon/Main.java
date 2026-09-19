@@ -1,5 +1,6 @@
 package org.crayon;
 
+import com.formdev.flatlaf.FlatDarkLaf;
 import com.github.kwhat.jnativehook.GlobalScreen;
 import com.github.kwhat.jnativehook.NativeHookException;
 import com.github.kwhat.jnativehook.keyboard.NativeKeyEvent;
@@ -75,7 +76,15 @@ public class Main implements NativeKeyListener {
         Color normalBg = new Color(45, 45, 45);
         Color focusBg = new Color(70, 70, 70); // Slightly lighter gray
 
+        // Setup FlatDarkLaf
+        FlatDarkLaf.setup();
+
         JFrame frame = new JFrame("CrayonNavConfig");
+
+        // Change color of bar
+        frame.getRootPane().putClientProperty("JRootPane.titleBarBackground", new Color(30, 30, 30));
+        frame.getRootPane().putClientProperty("JRootPane.titleBarForeground", Color.WHITE);
+
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(340, 560);
         frame.setResizable(false);
@@ -399,24 +408,20 @@ public class Main implements NativeKeyListener {
             RefreshNavWindow();
             return;
         }
+
+        // Setup FlatDarkLaf
+        FlatDarkLaf.setup();
+
+        // navFrame Setup
         navFrame = new JFrame("CrayonNavAssist");
         navFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         navFrame.setSize(420, 140);
         navFrame.setAlwaysOnTop(true);
 
-        Color bgColor = new Color(33, 33, 33);
-        Color panelColor = new Color(45, 45, 45);
-        Color textColor = Color.WHITE;
-        Color buttonColor = new Color(30, 115, 190);
-        Color borderColor = new Color(70, 70, 70);
-
-        navFrame.getContentPane().setBackground(bgColor);
-
         //=====================================================
         // Main info grid
         //=====================================================
         JPanel card = new JPanel(new GridBagLayout());
-        card.setBackground(panelColor);
         card.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
 
         Font labelFont = new Font("SansSerif", Font.PLAIN, 16);
@@ -440,13 +445,13 @@ public class Main implements NativeKeyListener {
             gbc.gridy = 0;
             JLabel titleLabel = new JLabel(titles[col], SwingConstants.CENTER);
             titleLabel.setFont(labelFont);
-            titleLabel.setForeground(textColor);
+            titleLabel.setForeground(Color.WHITE);
             card.add(titleLabel, gbc);
 
             gbc.gridy = 1;
             JLabel valueLabel = new JLabel("-", SwingConstants.CENTER);
             valueLabel.setFont(valFont);
-            valueLabel.setForeground(textColor);
+            titleLabel.setForeground(Color.WHITE);
             card.add(valueLabel, gbc);
 
             valueLabels[col] = valueLabel;
@@ -461,18 +466,14 @@ public class Main implements NativeKeyListener {
         // List Controls
         //=====================================================
         JPanel navPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 24, 4));
-        navPanel.setBackground(panelColor);
 
         prevBtn = new JButton("◄");
         nextBtn = new JButton("►");
         pageLabel = new JLabel("0 / 0", SwingConstants.CENTER);
         pageLabel.setFont(new Font("SansSerif", Font.BOLD, 11));
-        pageLabel.setForeground(textColor);
 
         for (JButton btn : new JButton[]{prevBtn, nextBtn})
         {
-            btn.setBackground(buttonColor);
-            btn.setForeground(textColor);
             btn.setFocusPainted(false);
             btn.setFont(new Font("SansSerif", Font.BOLD, 11));
             btn.setPreferredSize(new Dimension(100, 22));
@@ -484,7 +485,6 @@ public class Main implements NativeKeyListener {
         navPanel.add(prevBtn); navPanel.add(pageLabel); navPanel.add(nextBtn);
 
         JPanel navWrapper = new JPanel(new BorderLayout());
-        navWrapper.setBackground(bgColor);
         navWrapper.add(navPanel, BorderLayout.CENTER);
 
         navFrame.add(card, BorderLayout.CENTER);
@@ -588,8 +588,10 @@ public class Main implements NativeKeyListener {
 
         // Id
         idValueLabel.setText(String.valueOf(targetId));
+        idValueLabel.setForeground(Color.WHITE);
 
         // Target
         targetValueLabel.setText(String.format("(%d, %d)", (int) targetX, (int) targetZ));
+        targetValueLabel.setForeground(Color.WHITE);
     }
 }
