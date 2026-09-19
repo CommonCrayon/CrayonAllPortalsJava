@@ -44,13 +44,12 @@ public class Main implements NativeKeyListener {
 
     // Viewer Window components
     private static JFrame navFrame;
-    private static JLabel idLabel;
-    private static JLabel targetXLabel;
-    private static JLabel targetZLabel;
-    private static JLabel distanceXLabel;
-    private static JLabel distanceZLabel;
-    private static JLabel requiredAngleLabel;
-    private static JLabel angleChangeLabel;
+
+    private static JLabel idValueLabel;
+    private static JLabel targetValueLabel;
+    private static JLabel distanceValueLabel;
+    private static JLabel angleValueLabel;
+
     private static JLabel pageLabel;
     private static JButton prevBtn;
     private static JButton nextBtn;
@@ -400,96 +399,74 @@ public class Main implements NativeKeyListener {
             RefreshNavWindow();
             return;
         }
-
         navFrame = new JFrame("CrayonNavAssist");
         navFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        navFrame.setSize(400, 360);
+        navFrame.setSize(420, 140);
         navFrame.setAlwaysOnTop(true);
-        navFrame.setLayout(new BorderLayout(10, 10));
 
         Color bgColor = new Color(33, 33, 33);
         Color panelColor = new Color(45, 45, 45);
         Color textColor = Color.WHITE;
         Color buttonColor = new Color(30, 115, 190);
+        Color borderColor = new Color(70, 70, 70);
 
         navFrame.getContentPane().setBackground(bgColor);
 
+        //=====================================================
         // Main info grid
-        JPanel card = new JPanel(new GridLayout(5, 3, 5, 8));
+        //=====================================================
+        JPanel card = new JPanel(new GridBagLayout());
         card.setBackground(panelColor);
-        card.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        card.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
 
-        Font labelFont = new Font("SansSerif", Font.PLAIN, 14);
-        Font valFont = new Font("SansSerif", Font.PLAIN, 18);
+        Font labelFont = new Font("SansSerif", Font.PLAIN, 16);
+        Font valFont = new Font("SansSerif", Font.PLAIN, 16);
 
-        idLabel = new JLabel("-", SwingConstants.CENTER);
-        idLabel.setFont(valFont);
-        idLabel.setForeground(textColor);
-        card.add(new JLabel("")); card.add(idLabel); card.add(new JLabel(""));
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridy = 0;
+        gbc.weightx = 0;
+        gbc.weighty = 0;
+        gbc.insets = new Insets(0, 4, 2, 4);
+        gbc.anchor = GridBagConstraints.CENTER;
 
-        JLabel targetLabel = new JLabel("Target (X, Z):", SwingConstants.CENTER);
-        targetLabel.setFont(labelFont);
-        targetLabel.setForeground(textColor);
-        card.add(targetLabel);
+        String[] titles = {" ID ", "         Target         ", " Distance ", "           Angle           "};
+        // [107,-14010,-14938]
+        // /execute in minecraft:overworld run tp @s 330.39 75.00 153.07 -71.79 29.14
+        JLabel[] valueLabels = new JLabel[4];
 
-        targetXLabel = new JLabel("-", SwingConstants.CENTER);
-        targetXLabel.setFont(valFont);
-        targetXLabel.setForeground(textColor);
-        card.add(targetXLabel);
+        for (int col = 0; col < titles.length; col++)
+        {
+            gbc.gridx = col;
+            gbc.gridy = 0;
+            JLabel titleLabel = new JLabel(titles[col], SwingConstants.CENTER);
+            titleLabel.setFont(labelFont);
+            titleLabel.setForeground(textColor);
+            card.add(titleLabel, gbc);
 
-        targetZLabel = new JLabel("-", SwingConstants.CENTER);
-        targetZLabel.setFont(valFont);
-        targetZLabel.setForeground(textColor);
-        card.add(targetZLabel);
+            gbc.gridy = 1;
+            JLabel valueLabel = new JLabel("-", SwingConstants.CENTER);
+            valueLabel.setFont(valFont);
+            valueLabel.setForeground(textColor);
+            card.add(valueLabel, gbc);
 
-        JLabel distanceLabel = new JLabel("Distance (X, Z):", SwingConstants.CENTER);
-        distanceLabel.setFont(labelFont);
-        distanceLabel.setForeground(textColor);
-        card.add(distanceLabel);
+            valueLabels[col] = valueLabel;
+        }
 
-        distanceXLabel = new JLabel("-", SwingConstants.CENTER);
-        distanceXLabel.setFont(valFont);
-        distanceXLabel.setForeground(textColor);
-        card.add(distanceXLabel);
+        idValueLabel = valueLabels[0];
+        targetValueLabel = valueLabels[1];
+        distanceValueLabel = valueLabels[2];
+        angleValueLabel = valueLabels[3];
 
-        distanceZLabel = new JLabel("-", SwingConstants.CENTER);
-        distanceZLabel.setFont(valFont);
-        distanceZLabel.setForeground(textColor);
-        card.add(distanceZLabel);
-
-        JLabel reqAngleLabel = new JLabel("Required Angle:", SwingConstants.CENTER);
-        reqAngleLabel.setFont(labelFont);
-        reqAngleLabel.setForeground(textColor);
-        card.add(reqAngleLabel);
-
-        requiredAngleLabel = new JLabel("-", SwingConstants.CENTER);
-        requiredAngleLabel.setFont(valFont);
-        requiredAngleLabel.setForeground(textColor);
-        card.add(requiredAngleLabel); card.add(new JLabel(""));
-
-        JLabel turnAmountLabel = new JLabel("Turn Amount:", SwingConstants.CENTER);
-        turnAmountLabel.setFont(labelFont);
-        turnAmountLabel.setForeground(textColor);
-        card.add(turnAmountLabel);
-
-        angleChangeLabel = new JLabel("-", SwingConstants.CENTER);
-        angleChangeLabel.setFont(valFont);
-        angleChangeLabel.setForeground(textColor);
-        card.add(angleChangeLabel); card.add(new JLabel(""));
-
-        JPanel cardWrapper = new JPanel(new BorderLayout());
-        cardWrapper.setBackground(bgColor);
-        cardWrapper.setBorder(BorderFactory.createEmptyBorder(10, 10, 0, 10));
-        cardWrapper.add(card, BorderLayout.CENTER);
-
-        // Bottom Controls
-        JPanel navPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 10));
+        //=====================================================
+        // List Controls
+        //=====================================================
+        JPanel navPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 24, 4));
         navPanel.setBackground(panelColor);
 
-        prevBtn = new JButton("◄ Prev");
-        nextBtn = new JButton("Next ►");
+        prevBtn = new JButton("◄");
+        nextBtn = new JButton("►");
         pageLabel = new JLabel("0 / 0", SwingConstants.CENTER);
-        pageLabel.setFont(new Font("SansSerif", Font.BOLD, 12));
+        pageLabel.setFont(new Font("SansSerif", Font.BOLD, 11));
         pageLabel.setForeground(textColor);
 
         for (JButton btn : new JButton[]{prevBtn, nextBtn})
@@ -497,8 +474,8 @@ public class Main implements NativeKeyListener {
             btn.setBackground(buttonColor);
             btn.setForeground(textColor);
             btn.setFocusPainted(false);
-            btn.setFont(new Font("SansSerif", Font.BOLD, 12));
-            btn.setPreferredSize(new Dimension(100, 30));
+            btn.setFont(new Font("SansSerif", Font.BOLD, 11));
+            btn.setPreferredSize(new Dimension(100, 22));
         }
 
         prevBtn.addActionListener(e -> PrevItem());
@@ -508,10 +485,9 @@ public class Main implements NativeKeyListener {
 
         JPanel navWrapper = new JPanel(new BorderLayout());
         navWrapper.setBackground(bgColor);
-        navWrapper.setBorder(BorderFactory.createEmptyBorder(5, 10, 10, 10));
         navWrapper.add(navPanel, BorderLayout.CENTER);
 
-        navFrame.add(cardWrapper, BorderLayout.CENTER);
+        navFrame.add(card, BorderLayout.CENTER);
         navFrame.add(navWrapper, BorderLayout.SOUTH);
 
         navFrame.setLocationRelativeTo(null);
@@ -546,11 +522,14 @@ public class Main implements NativeKeyListener {
         if (targets.isEmpty() || targetIndex < 0)
         {
             pageLabel.setText("0 / 0");
-            idLabel.setText("-");
-            targetXLabel.setText("-"); targetZLabel.setText("-");
-            distanceXLabel.setText("-"); distanceZLabel.setText("-");
-            requiredAngleLabel.setText("-"); angleChangeLabel.setText("-");
-            prevBtn.setEnabled(false); nextBtn.setEnabled(false);
+
+            idValueLabel.setText("-");
+            targetValueLabel.setText("-");
+            distanceValueLabel.setText("-");
+            angleValueLabel.setText("-");
+
+            prevBtn.setEnabled(false);
+            nextBtn.setEnabled(false);
             return;
         }
 
@@ -572,10 +551,11 @@ public class Main implements NativeKeyListener {
         // Perform F3+C calculation if available
         if (playerX == null || playerZ == null || playerYaw == null || playerDimension == null)
         {
-            distanceXLabel.setText("-"); distanceXLabel.setForeground(Color.WHITE);
-            distanceZLabel.setText("-"); distanceZLabel.setForeground(Color.WHITE);
-            requiredAngleLabel.setText("-");
-            angleChangeLabel.setText("-"); angleChangeLabel.setForeground(Color.WHITE);
+            distanceValueLabel.setText("-");
+            distanceValueLabel.setForeground(Color.WHITE);
+
+            angleValueLabel.setText("-");
+            angleValueLabel.setForeground(Color.WHITE);
         }
         else
         {
@@ -591,24 +571,25 @@ public class Main implements NativeKeyListener {
 
             int distX = (int) (playerX - targetX);
             int distZ = (int) (playerZ - targetZ);
+            int distance = Math.abs(distX + distZ);
 
-            Color distXColor = ValueToColor(distX, 100.0);
-            Color distZColor = ValueToColor(distZ, 100.0);
+            Color distanceColor = ValueToColor(distance, 100.0);
 
-            distanceXLabel.setText(String.valueOf(distX));
-            distanceXLabel.setForeground(distXColor);
+            // Distance
+            distanceValueLabel.setText(String.valueOf(distance));
+            distanceValueLabel.setForeground(distanceColor);
 
-            distanceZLabel.setText(String.valueOf(distZ));
-            distanceZLabel.setForeground(distZColor);
+            // Angle
+            String arrow = angleChange >= 0 ? "->" : "<-";
 
-            requiredAngleLabel.setText(String.format("%.1f°", reqAngle));
-
-            angleChangeLabel.setText(String.format("%+.1f°", angleChange));
-            angleChangeLabel.setForeground(angleColor);
+            angleValueLabel.setText(String.format("%.2f° (%s %.1f°)", reqAngle, arrow, Math.abs(angleChange)));
+            angleValueLabel.setForeground(angleColor);
         }
 
-        idLabel.setText(String.valueOf(targetId));
-        targetXLabel.setText(String.valueOf((int) targetX));
-        targetZLabel.setText(String.valueOf((int) targetZ));
+        // Id
+        idValueLabel.setText(String.valueOf(targetId));
+
+        // Target
+        targetValueLabel.setText(String.format("(%d, %d)", (int) targetX, (int) targetZ));
     }
 }
