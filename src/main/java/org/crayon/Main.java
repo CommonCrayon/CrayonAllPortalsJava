@@ -538,7 +538,7 @@ public class Main implements NativeKeyListener {
 
             int distX = (int) (playerX - targetX);
             int distZ = (int) (playerZ - targetZ);
-            int distance = Math.abs(distX + distZ);
+            int distance = Math.abs(distX) + Math.abs(distZ);
 
             Color distanceColor = ValueToColor(distance, 100.0);
 

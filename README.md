@@ -2,7 +2,7 @@
 # Information
 
 This is a tool designed for Minecraft Speedrunning in the All Portals category.
-Ideally each player should download this tool and it allows for easier stronghold tracking and navigation.
+Ideally each player should download this tool as it allows for easier stronghold tracking and navigation.
 
 ### Known Issues
 - Some keybind combinations don't work.
@@ -35,7 +35,11 @@ Just enter the key within the entry box you'd like to use.
 ![](images/nav_assist_v1_3.png?raw=true)
 
 # Usage
+<<<<<<< Updated upstream
 1. Download CrayonAllPortalsJava-1.3.jar from releases.
+=======
+1. Download CrayonAllPortalsJava-1.4.jar from releases.
+>>>>>>> Stashed changes
 2. Run downloaded jar file.
 3. You will be presented with the Configuration Page.
 
