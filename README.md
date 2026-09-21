@@ -35,7 +35,7 @@ Just enter the key within the entry box you'd like to use.
 ![](images/nav_assist_v1_3.png?raw=true)
 
 # Usage
-1. Download CrayonAllPortalsJava-1.5.jar from releases.
+1. Download CrayonAllPortalsJava-1.6.jar from releases.
 2. Run downloaded jar file.
 3. You will be presented with the Configuration Page.
 

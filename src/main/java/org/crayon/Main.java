@@ -567,9 +567,9 @@ public class Main implements NativeKeyListener {
             double angleChange = (reqAngle - playerYaw) - 360.0 * Math.floor(((reqAngle - playerYaw) + 180.0) / 360.0);
             Color angleColor = ValueToColor(angleChange, 180.0);
 
-            int distX = (int) (playerX - targetX);
-            int distZ = (int) (playerZ - targetZ);
-            int distance = Math.abs(distX) + Math.abs(distZ);
+            double distX = (int) (playerX - targetX);
+            double distZ = (int) (playerZ - targetZ);
+            int distance = (int) Math.sqrt(distX * distX + distZ * distZ);
 
             Color distanceColor = ValueToColor(distance, 100.0);
 
