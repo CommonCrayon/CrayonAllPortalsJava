@@ -22,7 +22,7 @@ public class Main implements NativeKeyListener {
 
     // Regex Patterns
     private static final Pattern F3C_REGEX = Pattern.compile("/execute in minecraft:(\\w+) run tp @s ([\\-\\d.]+) ([\\-\\d.]+) ([\\-\\d.]+) ([\\-\\d.]+) ([\\-\\d.]+)");
-    private static final Pattern TARGET_REGEX = Pattern.compile("\\[\\s*([+-]?\\d+)\\s*,\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*,\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*]");
+    private static final Pattern TARGET_REGEX = Pattern.compile("\\[\\s*([+-]?\\d+)\\s*,\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*,\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*]\\s*(?:\"([^\"]*)\")?");
 
     // Player State
     private static String playerDimension = null;
@@ -31,7 +31,21 @@ public class Main implements NativeKeyListener {
     private static Double playerYaw = null;
 
     // Target State
-    private static final List<double[]> targets = new ArrayList<>();
+    private static class Target {
+        int id;
+        double x;
+        double z;
+        String note;
+
+        Target(int id, double x, double z, String note) {
+            this.id = id;
+            this.x = x;
+            this.z = z;
+            this.note = note;
+        }
+    }
+
+    private static final List<Target> targets = new ArrayList<>();
     private static int targetIndex = -1;
     private static String lastClip = "";
 
@@ -47,6 +61,8 @@ public class Main implements NativeKeyListener {
     private static JLabel targetValueLabel;
     private static JLabel distanceValueLabel;
     private static JLabel angleValueLabel;
+
+    private static JLabel noteStringLabel;
 
     private static JLabel pageLabel;
     private static JButton prevBtn;
@@ -350,11 +366,16 @@ public class Main implements NativeKeyListener {
         Matcher matcher = TARGET_REGEX.matcher(text);
         while (matcher.find())
         {
-            targets.add(new double[]{
-                    Double.parseDouble(matcher.group(1)),
-                    Double.parseDouble(matcher.group(2)),
-                    Double.parseDouble(matcher.group(3))
-            });
+            int id = Integer.parseInt(matcher.group(1));
+            double x = Double.parseDouble(matcher.group(2));
+            double z = Double.parseDouble(matcher.group(3));
+
+            String note = matcher.group(4);
+
+            if (note == null)
+                note = "";
+
+            targets.add(new Target(id, x, z, note));
         }
 
         if (targets.isEmpty())
@@ -430,6 +451,14 @@ public class Main implements NativeKeyListener {
         angleValueLabel = valueLabels[3];
 
         //=====================================================
+        // Note Label
+        //=====================================================
+
+        noteStringLabel = new JLabel("", SwingConstants.CENTER);
+        noteStringLabel.setFont(new Font("SansSerif", Font.PLAIN, 13));
+        noteStringLabel.setForeground(Color.YELLOW);
+
+        //=====================================================
         // List Controls
         //=====================================================
         JPanel navPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 24, 4));
@@ -454,7 +483,8 @@ public class Main implements NativeKeyListener {
         JPanel navWrapper = new JPanel(new BorderLayout());
         navWrapper.add(navPanel, BorderLayout.CENTER);
 
-        navFrame.add(card, BorderLayout.CENTER);
+        navFrame.add(card, BorderLayout.NORTH);
+        navFrame.add(noteStringLabel, BorderLayout.CENTER);
         navFrame.add(navWrapper, BorderLayout.SOUTH);
 
         navFrame.setLocationRelativeTo(null);
@@ -510,10 +540,11 @@ public class Main implements NativeKeyListener {
             nextBtn.setEnabled(targetIndex < targets.size() - 1);
         }
 
-        double[] currentTarget = targets.get(targetIndex);
-        int targetId = (int) currentTarget[0];
-        double targetX = currentTarget[1];
-        double targetZ = currentTarget[2];
+        Target currentTarget = targets.get(targetIndex);
+
+        int targetId = currentTarget.id;
+        double targetX = currentTarget.x;
+        double targetZ = currentTarget.z;
 
         // Perform F3+C calculation if available
         if (playerX == null || playerZ == null || playerYaw == null || playerDimension == null)
@@ -560,5 +591,8 @@ public class Main implements NativeKeyListener {
         // Target
         targetValueLabel.setText(String.format("(%d, %d)", (int) targetX, (int) targetZ));
         targetValueLabel.setForeground(Color.WHITE);
+
+        // Note
+        noteStringLabel.setText(currentTarget.note);
     }
 }
