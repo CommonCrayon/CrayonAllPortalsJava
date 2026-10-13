@@ -45,6 +45,9 @@ public class Main implements NativeKeyListener {
         }
     }
 
+    // Config
+    private static boolean targetChunk = false;
+
     private static final List<Target> targets = new ArrayList<>();
     private static int targetIndex = -1;
     private static String lastClip = "";
@@ -95,7 +98,7 @@ public class Main implements NativeKeyListener {
         // Frame setup
         JFrame frame = new JFrame("CrayonNavConfig");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(340, 475);
+        frame.setSize(340, 500);
         frame.setLocationRelativeTo(null);
 
         JPanel panel = new JPanel();
@@ -144,11 +147,25 @@ public class Main implements NativeKeyListener {
         launchButton.addActionListener(e -> Launch(textArea.getText()));
         panel.add(launchButton);
 
+        // Chunk target checkbox
+        JCheckBox chunkCheckBox = new JCheckBox("Target as Chunks");
+        chunkCheckBox.setFont(new Font("SansSerif", Font.PLAIN, 16));
+        chunkCheckBox.setBackground(panel.getBackground());
+        chunkCheckBox.setForeground(Color.WHITE);
+        chunkCheckBox.setFocusPainted(false);
+
+        chunkCheckBox.setBounds(15, 305, 294, 25);
+        chunkCheckBox.addActionListener(e -> {
+            targetChunk = chunkCheckBox.isSelected();
+            RefreshNavWindow(); // update immediately if the nav window is open
+        });
+        panel.add(chunkCheckBox);
+
         // Rebind Controls Panel
         JPanel rebindPanel = new JPanel();
         rebindPanel.setLayout(null);
         rebindPanel.setBackground(new Color(50, 52, 54));
-        rebindPanel.setBounds(15, 310, 294, 110);
+        rebindPanel.setBounds(15, 335, 294, 110);
 
         JLabel rebindTitle = new JLabel("Rebind Controls:", SwingConstants.LEFT);
         rebindTitle.setFont(new Font("SansSerif", Font.PLAIN, 15));
@@ -589,8 +606,16 @@ public class Main implements NativeKeyListener {
         idValueLabel.setForeground(Color.WHITE);
 
         // Target
-        targetValueLabel.setText(String.format("(%d, %d)", (int) targetX, (int) targetZ));
-        targetValueLabel.setForeground(Color.WHITE);
+        if (targetChunk)
+        {
+            targetValueLabel.setText(String.format("(%d, %d)", (int) Math.floor(targetX / 16.0), (int) Math.floor(targetZ / 16.0)));
+            targetValueLabel.setForeground(Color.WHITE);
+        }
+        else
+        {
+            targetValueLabel.setText(String.format("(%d, %d)", (int) targetX, (int) targetZ));
+            targetValueLabel.setForeground(Color.WHITE);
+        }
 
         // Note
         noteStringLabel.setText(currentTarget.note);
