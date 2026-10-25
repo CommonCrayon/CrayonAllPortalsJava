@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'org.crayon'
-version = '1.7'
+version = '1.8'
 
 repositories {
     mavenCentral()
@@ -23,6 +23,13 @@ dependencies {
 
 application {
     mainClass = 'org.crayon.Main'
+}
+
+// Target Java 17 so the jar runs on any Java 17+ install, whichever JDK builds it.
+// UTF-8 keeps the ◄ ► ° characters intact when compiling on Windows.
+tasks.withType(JavaCompile).configureEach {
+    options.release = 17
+    options.encoding = 'UTF-8'
 }
 
 test {

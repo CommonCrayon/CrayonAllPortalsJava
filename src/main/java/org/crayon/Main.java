@@ -9,315 +9,135 @@ import com.github.kwhat.jnativehook.keyboard.NativeKeyListener;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.datatransfer.DataFlavor;
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
-public class Main implements NativeKeyListener {
+/**
+ * Wires the app together: owns the target list, the latest F3+C reading and the hotkeys,
+ * and keeps the settings file up to date.
+ */
+public final class Main implements NativeKeyListener {
 
-    // Regex Patterns
-    private static final Pattern F3C_REGEX = Pattern.compile("/execute in minecraft:(\\w+) run tp @s ([\\-\\d.]+) ([\\-\\d.]+) ([\\-\\d.]+) ([\\-\\d.]+) ([\\-\\d.]+)");
-    private static final Pattern TARGET_REGEX = Pattern.compile("\\[\\s*([+-]?\\d+)\\s*,\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*,\\s*([+-]?\\d+(?:\\.\\d+)?)\\s*]\\s*(?:\"([^\"]*)\")?");
+    private static final String DEFAULT_TARGETS = """
+            [1, 2048, 0]
+            [2, 5120, 0]
+            [3, 8192, 0]
+            [4, 11264, 0]
+            [5, 14336, 0]
+            [6, 17408, 0]
+            [7, 20480, 0]
+            [8, 23552, 0]""";
 
-    // Player State
-    private static String playerDimension = null;
-    private static Double playerX = null;
-    private static Double playerZ = null;
-    private static Double playerYaw = null;
+    // Held in a field: java.util.logging only keeps weak references, so a local could be
+    // garbage collected and JNativeHook's verbose logging would come back
+    private static final Logger HOOK_LOGGER = Logger.getLogger(GlobalScreen.class.getPackage().getName());
 
-    // Target State
-    private static class Target {
-        int id;
-        double x;
-        double z;
-        String note;
+    private final Settings settings;
 
-        Target(int id, double x, double z, String note) {
-            this.id = id;
-            this.x = x;
-            this.z = z;
-            this.note = note;
-        }
+    // Target state (EDT only)
+    private final List<Target> targets = new ArrayList<>();
+    private int targetIndex = -1;
+    private String currentTargetKey;
+
+    // Player state from F3+C (EDT only)
+    private PlayerPosition player;
+    private String lastClip = "";
+
+    // Read on the hook thread, written on the EDT
+    private volatile KeyBind prevBind;
+    private volatile KeyBind nextBind;
+
+    private boolean targetChunks;
+    private boolean compactOverlay;
+    private float overlayOpacity;
+
+    private ConfigWindow configWindow;
+    private NavWindow navWindow;
+    private String hookError;
+
+    private Main(Settings settings) {
+        this.settings = settings;
+        this.currentTargetKey = settings.currentTargetKey();
+        this.prevBind = settings.prevBind();
+        this.nextBind = settings.nextBind();
+        this.targetChunks = settings.targetChunks();
+        this.compactOverlay = settings.compactOverlay();
+        this.overlayOpacity = settings.overlayOpacity();
     }
-
-    // Config
-    private static boolean targetChunk = false;
-
-    private static final List<Target> targets = new ArrayList<>();
-    private static int targetIndex = -1;
-    private static String lastClip = "";
-
-    // Global Key Code Binds (Native Key Codes)
-    private static int prevNativeKey = NativeKeyEvent.VC_LEFT;
-    private static int nextNativeKey = NativeKeyEvent.VC_RIGHT;
-    private static boolean requiresCtrl = true;
-
-    // Viewer Window components
-    private static JFrame navFrame;
-
-    private static JLabel idValueLabel;
-    private static JLabel targetValueLabel;
-    private static JLabel distanceValueLabel;
-    private static JLabel angleValueLabel;
-
-    private static JLabel noteStringLabel;
-
-    private static JLabel pageLabel;
-    private static JButton prevBtn;
-    private static JButton nextBtn;
 
     public static void main(String[] args) {
         // Disable verbose JNativeHook logging
-        Logger logger = Logger.getLogger(GlobalScreen.class.getPackage().getName());
-        logger.setLevel(Level.OFF);
-        logger.setUseParentHandlers(false);
+        HOOK_LOGGER.setLevel(Level.OFF);
+        HOOK_LOGGER.setUseParentHandlers(false);
 
-        // Register Global Keyboard Hook
-        try
-        {
-            GlobalScreen.registerNativeHook();
-            GlobalScreen.addNativeKeyListener(new Main());
-        }
-        catch (NativeHookException ex)
-        {
-            System.err.println("Failed to register global key hook: " + ex.getMessage());
-        }
-
-        // Highlight on focus
-        Color normalBg = new Color(45, 45, 45);
-        Color focusBg = new Color(70, 70, 70); // Slightly lighter gray
-
-        // Setup FlatDarkLaf
+        useNativeLibraryFolder();
         FlatDarkLaf.setup();
+        Settings settings = Settings.loadDefault();
+        SwingUtilities.invokeLater(() -> new Main(settings).start());
+    }
 
-        // Frame setup
-        JFrame frame = new JFrame("CrayonNavConfig");
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(340, 500);
-        frame.setLocationRelativeTo(null);
+    /**
+     * JNativeHook extracts its DLL next to the jar by default. Put it in the app's settings folder
+     * (%APPDATA%\CrayonNavAssist\native) instead so the jar's folder stays clean.
+     */
+    private static void useNativeLibraryFolder() {
+        if (System.getProperty("jnativehook.lib.path") != null) return;
+        Path dir = Settings.defaultFile().getParent().resolve("native");
+        try {
+            Files.createDirectories(dir);
+            System.setProperty("jnativehook.lib.path", dir.toString());
+        } catch (IOException e) {
+            System.err.println("Couldn't create " + dir + ", using the default library location: " + e.getMessage());
+        }
+    }
 
-        JPanel panel = new JPanel();
-        panel.setLayout(null);
-        frame.add(panel);
+    private void start() {
+        boolean hotkeysAvailable = registerHotkeys();
 
-        JLabel titleLabel = new JLabel("Crayon Nav Assist", SwingConstants.CENTER);
-        titleLabel.setFont(new Font("SansSerif", Font.PLAIN, 22));
-        titleLabel.setForeground(Color.WHITE);
-        titleLabel.setBounds(10, 10, 304, 30);
-        panel.add(titleLabel);
+        configWindow = new ConfigWindow(this, hotkeysAvailable);
+        configWindow.show();
 
-        JLabel subtitleLabel = new JLabel("Paste list below:");
-        subtitleLabel.setFont(new Font("SansSerif", Font.PLAIN, 16));
-        subtitleLabel.setForeground(Color.WHITE);
-        subtitleLabel.setBounds(15, 45, 304, 25);
-        panel.add(subtitleLabel);
+        if (!hotkeysAvailable) {
+            JOptionPane.showMessageDialog(configWindow.frame(),
+                    "Global hotkeys couldn't be started, so the keybinds won't work.\n"
+                            + "You can still switch targets with the ◄ ► buttons.\n\n"
+                            + "Reason: " + hookError,
+                    "Hotkeys unavailable", JOptionPane.WARNING_MESSAGE);
+        }
 
-        JTextArea textArea = new JTextArea(
-                """
-                [1, 2048, 0]
-                [2, 5120, 0]
-                [3, 8192, 0]
-                [4, 11264, 0]
-                [5, 14336, 0]
-                [6, 17408, 0]
-                [7, 20480, 0]
-                [8, 23552, 0]"""
-        );
-        textArea.setFont(new Font("Monospaced", Font.PLAIN, 14));
-        textArea.setForeground(Color.WHITE);
-        textArea.setCaretColor(Color.WHITE);
-        textArea.setMargin(new Insets(8, 8, 8, 8));
+        // Clipboard polling for F3+C (50ms interval)
+        new Timer(50, e -> checkClipboard()).start();
+    }
 
-        JScrollPane scrollPane = new JScrollPane(textArea);
-        scrollPane.setBounds(15, 75, 294, 180);
-        scrollPane.setBorder(BorderFactory.createEmptyBorder());
-        panel.add(scrollPane);
-
-        JButton launchButton = new JButton("Launch");
-        launchButton.setFont(new Font("SansSerif", Font.PLAIN, 18));
-        launchButton.setBackground(new Color(33, 115, 176));
-        launchButton.setForeground(Color.WHITE);
-        launchButton.setFocusPainted(false);
-        launchButton.setBounds(15, 265, 294, 35);
-        launchButton.addActionListener(e -> Launch(textArea.getText()));
-        panel.add(launchButton);
-
-        // Chunk target checkbox
-        JCheckBox chunkCheckBox = new JCheckBox("Target as Chunks");
-        chunkCheckBox.setFont(new Font("SansSerif", Font.PLAIN, 16));
-        chunkCheckBox.setBackground(panel.getBackground());
-        chunkCheckBox.setForeground(Color.WHITE);
-        chunkCheckBox.setFocusPainted(false);
-
-        chunkCheckBox.setBounds(15, 305, 294, 25);
-        chunkCheckBox.addActionListener(e -> {
-            targetChunk = chunkCheckBox.isSelected();
-            RefreshNavWindow(); // update immediately if the nav window is open
-        });
-        panel.add(chunkCheckBox);
-
-        // Rebind Controls Panel
-        JPanel rebindPanel = new JPanel();
-        rebindPanel.setLayout(null);
-        rebindPanel.setBackground(new Color(50, 52, 54));
-        rebindPanel.setBounds(15, 335, 294, 110);
-
-        JLabel rebindTitle = new JLabel("Rebind Controls:", SwingConstants.LEFT);
-        rebindTitle.setFont(new Font("SansSerif", Font.PLAIN, 15));
-        rebindTitle.setForeground(Color.WHITE);
-        rebindTitle.setBounds(10, 5, 274, 25);
-        rebindPanel.add(rebindTitle);
-
-        JLabel prevLabel = new JLabel("Prev Item:");
-        prevLabel.setFont(new Font("SansSerif", Font.PLAIN, 13));
-        prevLabel.setForeground(Color.WHITE);
-        prevLabel.setBounds(10, 40, 70, 25);
-        rebindPanel.add(prevLabel);
-
-        JTextField prevField = new JTextField("CTRL + LEFT");
-        prevField.setEditable(false);
-        prevField.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        prevField.setBackground(new Color(45, 45, 45));
-        prevField.setForeground(Color.WHITE);
-        prevField.setBounds(85, 40, 195, 25);
-
-        // On Focus
-        prevField.addFocusListener(new java.awt.event.FocusAdapter() {
-            @Override
-            public void focusGained(java.awt.event.FocusEvent e) {
-                prevField.setBackground(focusBg);
-            }
-
-            @Override
-            public void focusLost(java.awt.event.FocusEvent e) {
-                prevField.setBackground(normalBg);
-            }
-        });
-
-        // For Rebinding
-        prevField.addKeyListener(new KeyAdapter()
-        {
-            @Override
-            public void keyPressed(KeyEvent e) {
-                if (e.getKeyCode() == KeyEvent.VK_CONTROL || e.getKeyCode() == KeyEvent.VK_SHIFT || e.getKeyCode() == KeyEvent.VK_ALT || e.getKeyCode() == KeyEvent.VK_META)
-                {
-                    return;
-                }
-
-                // Get Key
-                prevNativeKey = switch (e.getKeyCode()) {
-                    case KeyEvent.VK_LEFT -> NativeKeyEvent.VC_LEFT;
-                    case KeyEvent.VK_RIGHT -> NativeKeyEvent.VC_RIGHT;
-                    case KeyEvent.VK_UP -> NativeKeyEvent.VC_UP;
-                    case KeyEvent.VK_DOWN -> NativeKeyEvent.VC_DOWN;
-                    default -> NativeKeyEvent.VC_UNDEFINED;
-                };
-
-                // String Builder for display
-                StringBuilder keyString = new StringBuilder();
-                if (e.isControlDown())
-                {
-                    requiresCtrl = true;
-                    keyString.append("CTRL + ");
-                }
-                else {
-                    requiresCtrl = false;
-                }
-                keyString.append(KeyEvent.getKeyText(e.getKeyCode()).toUpperCase());
-
-                prevField.setText(keyString.toString());
-            }
-        });
-        rebindPanel.add(prevField);
-
-        JLabel nextLabel = new JLabel("Next Item:");
-        nextLabel.setFont(new Font("SansSerif", Font.PLAIN, 13));
-        nextLabel.setForeground(Color.WHITE);
-        nextLabel.setBounds(10, 75, 70, 25);
-        rebindPanel.add(nextLabel);
-
-        JTextField nextField = new JTextField("CTRL + RIGHT");
-        nextField.setEditable(false);
-        nextField.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        nextField.setBackground(new Color(45, 45, 45));
-        nextField.setForeground(Color.WHITE);
-        nextField.setBounds(85, 75, 195, 25);
-
-        // On Focus
-        nextField.addFocusListener(new java.awt.event.FocusAdapter() {
-            @Override
-            public void focusGained(java.awt.event.FocusEvent e) {
-                nextField.setBackground(focusBg);
-            }
-
-            @Override
-            public void focusLost(java.awt.event.FocusEvent e) {
-                nextField.setBackground(normalBg);
-            }
-        });
-
-        // For Rebinding
-        nextField.addKeyListener(new KeyAdapter()
-        {
-            @Override
-            public void keyPressed(KeyEvent e) {
-                if (e.getKeyCode() == KeyEvent.VK_CONTROL || e.getKeyCode() == KeyEvent.VK_SHIFT || e.getKeyCode() == KeyEvent.VK_ALT || e.getKeyCode() == KeyEvent.VK_META)
-                {
-                    return;
-                }
-
-                nextNativeKey = switch (e.getKeyCode()) {
-                    case KeyEvent.VK_LEFT -> NativeKeyEvent.VC_LEFT;
-                    case KeyEvent.VK_RIGHT -> NativeKeyEvent.VC_RIGHT;
-                    case KeyEvent.VK_UP -> NativeKeyEvent.VC_UP;
-                    case KeyEvent.VK_DOWN -> NativeKeyEvent.VC_DOWN;
-                    default -> NativeKeyEvent.VC_UNDEFINED;
-                };
-
-                // String Builder for display
-                StringBuilder keyString = new StringBuilder();
-                if (e.isControlDown())
-                {
-                    requiresCtrl = true;
-                    keyString.append("CTRL + ");
-                }
-                else {
-                    requiresCtrl = false;
-                }
-                keyString.append(KeyEvent.getKeyText(e.getKeyCode()).toUpperCase());
-
-                nextField.setText(keyString.toString());
-            }
-        });
-        rebindPanel.add(nextField);
-
-        panel.add(rebindPanel);
-        frame.setVisible(true);
-
-        // Start Clipboard Monitoring Timer (50ms interval)
-        Timer timer = new Timer(50, e -> CheckClipboard());
-        timer.start();
+    private boolean registerHotkeys() {
+        try {
+            GlobalScreen.registerNativeHook();
+            GlobalScreen.addNativeKeyListener(this);
+            return true;
+        } catch (NativeHookException | LinkageError ex) {
+            hookError = ex.getMessage() != null ? ex.getMessage() : ex.toString();
+            System.err.println("Failed to register global key hook: " + hookError);
+            return false;
+        }
     }
 
     //=========================================================
-    // Global Key Event Listener
+    // Global hotkeys (hook thread)
     //=========================================================
     @Override
-    public void nativeKeyPressed(NativeKeyEvent e)
-    {
-        boolean ctrlPressed = (e.getModifiers() & NativeKeyEvent.CTRL_MASK) != 0;
+    public void nativeKeyPressed(NativeKeyEvent e) {
+        // A rebind box waiting for a key takes the press instead
+        if (KeyBindField.offerNativeKey(e)) return;
 
-        if (requiresCtrl && !ctrlPressed) return;
-
-        if (e.getKeyCode() == prevNativeKey) {
-            SwingUtilities.invokeLater(Main::PrevItem);
-        } else if (e.getKeyCode() == nextNativeKey) {
-            SwingUtilities.invokeLater(Main::NextItem);
+        switch (KeyBind.resolve(e.getKeyCode(), e.getModifiers(), prevBind, nextBind)) {
+            case 0 -> SwingUtilities.invokeLater(this::prevItem);
+            case 1 -> SwingUtilities.invokeLater(this::nextItem);
+            default -> { }
         }
     }
 
@@ -325,299 +145,187 @@ public class Main implements NativeKeyListener {
     @Override public void nativeKeyTyped(NativeKeyEvent e) {}
 
     //=========================================================
-    // MATH HELPERS
+    // Clipboard polling
     //=========================================================
-    private static Color ValueToColor(double value, double maxRange)
-    {
-        double absVal = Math.abs(value);
-        if (absVal <= 5.0) return Color.GREEN;
-        if (absVal >= maxRange) return Color.RED;
-
-        float t = (float) ((absVal - 5.0) / (maxRange - 5.0));
-        return new Color(t, 1.0f - t, 0.0f);
-    }
-
-    //=========================================================
-    // Clipboard Polling
-    //=========================================================
-    private static void CheckClipboard() {
-        try
-        {
+    private void checkClipboard() {
+        try {
             String text = (String) Toolkit.getDefaultToolkit().getSystemClipboard().getData(DataFlavor.stringFlavor);
-
-            if (text != null && !text.equals(lastClip))
-            {
+            if (text != null && !text.equals(lastClip)) {
                 lastClip = text;
-                ParseF3C(text);
+                PlayerPosition.parse(text).ifPresent(position -> {
+                    player = position;
+                    refreshNav();
+                });
             }
+        } catch (Exception ignored) {
+            // Clipboard busy or not text
         }
-        catch (Exception ignored) {}
-    }
-
-    private static void ParseF3C(String text)
-    {
-        Matcher matcher = F3C_REGEX.matcher(text);
-        if (!matcher.find()) return;
-
-        try
-        {
-            playerDimension = matcher.group(1);
-            playerX = Double.parseDouble(matcher.group(2));
-            playerZ = Double.parseDouble(matcher.group(4));
-            playerYaw = Double.parseDouble(matcher.group(5));
-        }
-        catch (Exception e)
-        {
-            System.err.println("Parse failed: " + e.getMessage());
-        }
-
-        RefreshNavWindow();
     }
 
     //=========================================================
-    // Nav Window Related
+    // Targets
     //=========================================================
-    private static void Launch(String text)
-    {
+    void launch(String text) {
+        List<Target> parsed = Target.parseAll(text);
+        if (parsed.isEmpty()) {
+            JOptionPane.showMessageDialog(configWindow.frame(), "No target lines were found.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
         targets.clear();
-        Matcher matcher = TARGET_REGEX.matcher(text);
-        while (matcher.find())
-        {
-            int id = Integer.parseInt(matcher.group(1));
-            double x = Double.parseDouble(matcher.group(2));
-            double z = Double.parseDouble(matcher.group(3));
+        targets.addAll(parsed);
 
-            String note = matcher.group(4);
+        // Stay on the same target if it's still in the list (relaunch after a crash, or after fixing a line).
+        // A new run has different coordinates, so it starts from the top.
+        targetIndex = Math.max(0, indexOfTarget(currentTargetKey));
+        rememberCurrentTarget();
+        settings.setTargetsText(text);
+        settings.save();
 
-            if (note == null)
-                note = "";
-
-            targets.add(new Target(id, x, z, note));
-        }
-
-        if (targets.isEmpty())
-        {
-            JOptionPane.showMessageDialog(null, "No target lines were found.", "Error", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        targetIndex = 0;
-        StartNavWindow();
+        openNavWindow();
     }
 
-    public static void StartNavWindow()
-    {
-        if (navFrame != null && navFrame.isDisplayable())
-        {
-            navFrame.toFront();
-            RefreshNavWindow();
-            return;
+    private int indexOfTarget(String key) {
+        if (key == null) return -1;
+        for (int i = 0; i < targets.size(); i++) {
+            if (targets.get(i).key().equals(key)) return i;
         }
+        return -1;
+    }
 
-        // Setup FlatDarkLaf
-        FlatDarkLaf.setup();
+    void prevItem() {
+        goTo(targetIndex - 1);
+    }
 
-        // navFrame Setup
-        navFrame = new JFrame("CrayonNavAssist");
-        navFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        navFrame.setSize(420, 140);
-        navFrame.setAlwaysOnTop(true);
+    void nextItem() {
+        goTo(targetIndex + 1);
+    }
 
-        //=====================================================
-        // Main info grid
-        //=====================================================
-        JPanel card = new JPanel(new GridBagLayout());
-        card.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
+    void firstItem() {
+        goTo(0);
+    }
 
-        Font labelFont = new Font("SansSerif", Font.PLAIN, 16);
-        Font valFont = new Font("SansSerif", Font.PLAIN, 16);
+    private void goTo(int index) {
+        if (targets.isEmpty()) return;
+        targetIndex = Math.max(0, Math.min(targets.size() - 1, index));
+        rememberCurrentTarget();
+        settings.saveSoon();
+        refreshNav();
+    }
 
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.gridy = 0;
-        gbc.weightx = 0;
-        gbc.weighty = 0;
-        gbc.insets = new Insets(0, 4, 2, 4);
-        gbc.anchor = GridBagConstraints.CENTER;
-
-        String[] titles = {" ID ", "         Target         ", " Distance ", "           Angle           "};
-        // [107,-14010,-14938]
-        // /execute in minecraft:overworld run tp @s 330.39 75.00 153.07 -71.79 29.14
-        JLabel[] valueLabels = new JLabel[4];
-
-        for (int col = 0; col < titles.length; col++)
-        {
-            gbc.gridx = col;
-            gbc.gridy = 0;
-            JLabel titleLabel = new JLabel(titles[col], SwingConstants.CENTER);
-            titleLabel.setFont(labelFont);
-            titleLabel.setForeground(Color.WHITE);
-            card.add(titleLabel, gbc);
-
-            gbc.gridy = 1;
-            JLabel valueLabel = new JLabel("-", SwingConstants.CENTER);
-            valueLabel.setFont(valFont);
-            titleLabel.setForeground(Color.WHITE);
-            card.add(valueLabel, gbc);
-
-            valueLabels[col] = valueLabel;
-        }
-
-        idValueLabel = valueLabels[0];
-        targetValueLabel = valueLabels[1];
-        distanceValueLabel = valueLabels[2];
-        angleValueLabel = valueLabels[3];
-
-        //=====================================================
-        // Note Label
-        //=====================================================
-
-        noteStringLabel = new JLabel("", SwingConstants.CENTER);
-        noteStringLabel.setFont(new Font("SansSerif", Font.PLAIN, 13));
-        noteStringLabel.setForeground(Color.YELLOW);
-
-        //=====================================================
-        // List Controls
-        //=====================================================
-        JPanel navPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 24, 4));
-
-        prevBtn = new JButton("◄");
-        nextBtn = new JButton("►");
-        pageLabel = new JLabel("0 / 0", SwingConstants.CENTER);
-        pageLabel.setFont(new Font("SansSerif", Font.BOLD, 11));
-
-        for (JButton btn : new JButton[]{prevBtn, nextBtn})
-        {
-            btn.setFocusPainted(false);
-            btn.setFont(new Font("SansSerif", Font.BOLD, 11));
-            btn.setPreferredSize(new Dimension(100, 22));
-        }
-
-        prevBtn.addActionListener(e -> PrevItem());
-        nextBtn.addActionListener(e -> NextItem());
-
-        navPanel.add(prevBtn); navPanel.add(pageLabel); navPanel.add(nextBtn);
-
-        JPanel navWrapper = new JPanel(new BorderLayout());
-        navWrapper.add(navPanel, BorderLayout.CENTER);
-
-        navFrame.add(card, BorderLayout.NORTH);
-        navFrame.add(noteStringLabel, BorderLayout.CENTER);
-        navFrame.add(navWrapper, BorderLayout.SOUTH);
-
-        navFrame.setLocationRelativeTo(null);
-        navFrame.setVisible(true);
-
-        RefreshNavWindow();
+    private void rememberCurrentTarget() {
+        currentTargetKey = targets.get(targetIndex).key();
+        settings.setCurrentTargetKey(currentTargetKey);
     }
 
     //=========================================================
-
-    private static void PrevItem()
-    {
-        if (targets.isEmpty()) return;
-        targetIndex = Math.max(0, targetIndex - 1);
-        RefreshNavWindow();
+    // Nav window
+    //=========================================================
+    private void openNavWindow() {
+        if (navWindow != null && navWindow.isOpen()) {
+            navWindow.toFront();
+            refreshNav();
+            return;
+        }
+        navWindow = new NavWindow(this, compactOverlay, overlayOpacity, settings.navWindowLocation());
+        render(navWindow);
+        navWindow.show();
     }
 
-    private static void NextItem()
-    {
-        if (targets.isEmpty()) return;
-        targetIndex = Math.min(targets.size() - 1, targetIndex + 1);
-        RefreshNavWindow();
+    private void refreshNav() {
+        if (navWindow != null && navWindow.isOpen()) render(navWindow);
+    }
+
+    private void render(NavWindow window) {
+        boolean hasTarget = targetIndex >= 0 && targetIndex < targets.size();
+        window.render(hasTarget ? targets.get(targetIndex) : null, targetIndex, targets.size(), player, targetChunks);
+    }
+
+    void navWindowMoved(Point location) {
+        settings.setNavWindowLocation(location);
+        settings.saveSoon();
     }
 
     //=========================================================
+    // Config page
+    //=========================================================
+    String initialTargetsText() {
+        String saved = settings.targetsText();
+        return saved != null ? saved : DEFAULT_TARGETS;
+    }
 
-    // Refresh target for Nav
-    private static void RefreshNavWindow()
-    {
-        if (navFrame == null || !navFrame.isDisplayable()) return;
+    boolean targetChunks() {
+        return targetChunks;
+    }
 
-        if (targets.isEmpty() || targetIndex < 0)
-        {
-            pageLabel.setText("0 / 0");
+    void setTargetChunks(boolean value) {
+        targetChunks = value;
+        settings.setTargetChunks(value);
+        settings.saveSoon();
+        refreshNav();
+    }
 
-            idValueLabel.setText("-");
-            targetValueLabel.setText("-");
-            distanceValueLabel.setText("-");
-            angleValueLabel.setText("-");
+    boolean compactOverlay() {
+        return compactOverlay;
+    }
 
-            prevBtn.setEnabled(false);
-            nextBtn.setEnabled(false);
-            return;
+    void setCompactOverlay(boolean value) {
+        compactOverlay = value;
+        settings.setCompactOverlay(value);
+        settings.saveSoon();
+
+        // A window can't switch between borderless and normal while open, so rebuild it in place
+        if (navWindow != null && navWindow.isOpen()) {
+            Point location = navWindow.location();
+            navWindow.dispose();
+            navWindow = new NavWindow(this, value, overlayOpacity, location);
+            render(navWindow);
+            navWindow.show();
         }
+    }
 
-        pageLabel.setText((targetIndex + 1) + " / " + targets.size());
+    float overlayOpacity() {
+        return overlayOpacity;
+    }
 
-        if (targets.size() <= 1) {
-            prevBtn.setEnabled(false);
-            nextBtn.setEnabled(false);
-        } else {
-            prevBtn.setEnabled(targetIndex > 0);
-            nextBtn.setEnabled(targetIndex < targets.size() - 1);
-        }
+    void setOverlayOpacity(float value) {
+        overlayOpacity = Settings.clampOpacity(value);
+        settings.setOverlayOpacity(overlayOpacity);
+        settings.saveSoon();
+        if (navWindow != null && navWindow.isOpen()) navWindow.setOpacity(overlayOpacity);
+    }
 
-        Target currentTarget = targets.get(targetIndex);
+    KeyBind prevBind() {
+        return prevBind;
+    }
 
-        int targetId = currentTarget.id;
-        double targetX = currentTarget.x;
-        double targetZ = currentTarget.z;
+    void setPrevBind(KeyBind bind) {
+        prevBind = bind;
+        settings.setPrevBind(bind);
+        settings.saveSoon();
+    }
 
-        // Perform F3+C calculation if available
-        if (playerX == null || playerZ == null || playerYaw == null || playerDimension == null)
-        {
-            distanceValueLabel.setText("-");
-            distanceValueLabel.setForeground(Color.WHITE);
+    KeyBind nextBind() {
+        return nextBind;
+    }
 
-            angleValueLabel.setText("-");
-            angleValueLabel.setForeground(Color.WHITE);
-        }
-        else
-        {
-            if (playerDimension.contains("nether"))
-            {
-                targetX /= 8.0;
-                targetZ /= 8.0;
-            }
+    void setNextBind(KeyBind bind) {
+        nextBind = bind;
+        settings.setNextBind(bind);
+        settings.saveSoon();
+    }
 
-            double reqAngle = Math.toDegrees(Math.atan2(playerX - targetX, targetZ - playerZ));
-            double angleChange = (reqAngle - playerYaw) - 360.0 * Math.floor(((reqAngle - playerYaw) + 180.0) / 360.0);
-            Color angleColor = ValueToColor(angleChange, 180.0);
+    Point savedConfigWindowLocation() {
+        return settings.configWindowLocation();
+    }
 
-            double distX = (int) (playerX - targetX);
-            double distZ = (int) (playerZ - targetZ);
-            int distance = (int) Math.sqrt(distX * distX + distZ * distZ);
+    void configWindowMoved(Point location) {
+        settings.setConfigWindowLocation(location);
+        settings.saveSoon();
+    }
 
-            Color distanceColor = ValueToColor(distance, 100.0);
-
-            // Distance
-            distanceValueLabel.setText(String.valueOf(distance));
-            distanceValueLabel.setForeground(distanceColor);
-
-            // Angle
-            String arrow = angleChange >= 0 ? "->" : "<-";
-
-            angleValueLabel.setText(String.format("%.2f° (%s %.1f°)", reqAngle, arrow, Math.abs(angleChange)));
-            angleValueLabel.setForeground(angleColor);
-        }
-
-        // Id
-        idValueLabel.setText(String.valueOf(targetId));
-        idValueLabel.setForeground(Color.WHITE);
-
-        // Target
-        if (targetChunk)
-        {
-            targetValueLabel.setText(String.format("(%d, %d)", (int) Math.floor(targetX / 16.0), (int) Math.floor(targetZ / 16.0)));
-            targetValueLabel.setForeground(Color.WHITE);
-        }
-        else
-        {
-            targetValueLabel.setText(String.format("(%d, %d)", (int) targetX, (int) targetZ));
-            targetValueLabel.setForeground(Color.WHITE);
-        }
-
-        // Note
-        noteStringLabel.setText(currentTarget.note);
+    /** Flushes anything still waiting to be saved. */
+    void exiting() {
+        settings.save();
     }
 }
